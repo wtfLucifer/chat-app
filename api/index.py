@@ -8,44 +8,48 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- API Configuration ---
-RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
+# NEW: Key for the Hugging Face API
+HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY') 
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-# --- FINAL FIX: PLEASE CONFIGURE THESE VALUES ---
 
-# 1. For RapidAPI:
-# Go to your RapidAPI dashboard, find the API you subscribed to, and get the correct Host and URL.
-# The error "API doesn't exists" means the host below is WRONG for your key.
-RAPIDAPI_HOST = "mistral-7b-instruct-v0.1.p.rapidapi.com" # <-- REPLACE THIS with the correct host from RapidAPI
-RAPIDAPI_URL = f"https://{RAPIDAPI_HOST}/" # The URL is built from the host.
-
-# 2. For OpenAccount:
+# --- PLEASE CONFIGURE THIS VALUE ---
 # The error "NameResolutionError" means the URL below is WRONG.
 # PLEASE REPLACE THE URL BELOW WITH THE CORRECT ONE FROM YOUR API PROVIDER'S DOCUMENTATION.
-OPENACCOUNT_API_URL = "https://api.your-openaccount-provider.com/v1/chat" # <-- REPLACE THIS with the correct URL.
+OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions" # <-- PASTE YOUR CORRECT URL HERE
+
+
+# --- No need to edit below this line ---
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
-    if model == 'mistral-rapidapi':
-        if not RAPIDAPI_KEY:
-            return {"error": "RapidAPI key is not configured on the server."}
+    if model == 'mistral-huggingface':
+        if not HUGGINGFACE_API_KEY:
+            return {"error": "Hugging Face API key is not configured on the server."}
         
-        payload = {"message": prompt}
-        headers = {
-            "content-type": "application/json",
-            "X-RapidAPI-Key": RAPIDAPI_KEY,
-            "X-RapidAPI-Host": RAPIDAPI_HOST # Using the variable from above
-        }
+        payload = {"inputs": prompt}
+        headers = { "Authorization": f"Bearer {HUGGINGFACE_API_KEY}" }
+        
         try:
-            response = requests.post(RAPIDAPI_URL, json=payload, headers=headers, timeout=30, verify=False)
+            response = requests.post(HUGGINGFACE_API_URL, json=payload, headers=headers, timeout=30)
             response.raise_for_status()
             api_response_data = response.json()
-            content = api_response_data.get('output', f"Error: Could not find 'output' in API response. Full response: {api_response_data}")
-            return {"response": content}
-        except requests.exceptions.HTTPError as e:
-            return {"error": f"API call to RapidAPI failed: {e}. Response: {e.response.text}"}
+
+            # The response is a list with a dictionary inside.
+            if isinstance(api_response_data, list) and len(api_response_data) > 0:
+                content = api_response_data[0].get('generated_text', '')
+                # The model often returns the original prompt, so we remove it.
+                if content.startswith(prompt):
+                    content = content[len(prompt):].strip()
+                return {"response": content}
+            else:
+                return {"error": f"Unexpected API response format from Hugging Face. Response: {api_response_data}"}
+
+        except requests.exceptions.RequestException as e:
+            return {"error": f"API call to Hugging Face failed: {e}"}
         except Exception as e:
-            return {"error": f"An unexpected error occurred with the RapidAPI call: {e}"}
+            return {"error": f"An unexpected error occurred with the Hugging Face call: {e}"}
 
     elif model == 'mistral-openaccount':
         if "your-openaccount-provider.com" in OPENACCOUNT_API_URL:
