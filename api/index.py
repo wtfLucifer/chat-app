@@ -9,76 +9,52 @@ import datetime
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- API Configuration ---
-HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY') 
-OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
-
-# --- API URLs ---
-# Using the reliable microsoft/DialoGPT-small conversational model.
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-small"
-# You have correctly identified the OpenRouter URL.
-OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+# We now only need one key, for the working OpenRouter service.
+OPENROUTER_API_KEY = os.environ.get('OPENACCOUNT_API_KEY') # Using the same Vercel variable name
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- DEBUGGING VERSION ---
-# We will use this to confirm the new code is deployed.
-APP_VERSION = "v5.1-dialogpt-small"
+APP_VERSION = "v6.0-openrouter-only-fix"
+
+def call_openrouter(prompt, model_identifier):
+    """A single, reliable function to call the OpenRouter API."""
+    if not OPENROUTER_API_KEY:
+        return {"error": "API key is not configured on the server."}
+
+    payload = { 
+        "model": model_identifier,
+        "messages": [{"role": "user", "content": prompt}] 
+    }
+    headers = { 
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "https://final-chat-app.vercel.app", # Replace with your Vercel URL
+        "X-Title": "Final Chat App" # Can be any name
+    }
+    try:
+        response = requests.post(OPENROUTER_API_URL, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        api_response_data = response.json()
+        content = api_response_data['choices'][0]['message']['content']
+        return {"response": content}
+    except requests.exceptions.HTTPError as e:
+        return {"error": f"API call to OpenRouter failed for model {model_identifier}: {e}. Response: {e.response.text}"}
+    except (KeyError, IndexError) as e:
+        return {"error": f"Failed to parse API response from OpenRouter. Response: {api_response_data}"}
+    except Exception as e:
+        return {"error": f"An unexpected error occurred: {e}"}
+
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
-    if model == 'mistral-huggingface':
-        if not HUGGINGFACE_API_KEY:
-            return {"error": "Hugging Face API key is not configured on the server."}
-        
-        # Payload for the DialoGPT conversational model.
-        payload = {"inputs": {"text": prompt}}
-        headers = { "Authorization": f"Bearer {HUGGINGFACE_API_KEY}" }
-        
-        try:
-            response = requests.post(HUGGINGFACE_API_URL, json=payload, headers=headers, timeout=45)
-            response.raise_for_status()
-            api_response_data = response.json()
-
-            # The response format for DialoGPT.
-            if isinstance(api_response_data, dict) and 'generated_text' in api_response_data:
-                content = api_response_data.get('generated_text', '')
-                return {"response": content}
-            else:
-                if isinstance(api_response_data, dict) and 'error' in api_response_data:
-                    if "is currently loading" in api_response_data['error']:
-                        return {"error": f"Model is loading, please try again in {int(api_response_data.get('estimated_time', 20))} seconds."}
-                    return {"error": f"Hugging Face API Error: {api_response_data['error']}"}
-                return {"error": f"Unexpected API response format from Hugging Face. Response: {api_response_data}"}
-
-        except requests.exceptions.HTTPError as e:
-            return {"error": f"API call to Hugging Face failed: {e}. Response: {e.response.text}"}
-        except Exception as e:
-            return {"error": f"An unexpected error occurred with the Hugging Face call: {e}"}
-
-    elif model == 'mistral-openaccount':
-        if not OPENACCOUNT_API_KEY:
-            return {"error": "OpenAccount (OpenRouter) API key is not configured on the server."}
-        
-        payload = { 
-            "model": "mistralai/mistral-7b-instruct",
-            "messages": [{"role": "user", "content": prompt}] 
-        }
-        headers = { 
-            "Authorization": f"Bearer {OPENACCOUNT_API_KEY}",
-            "HTTP-Referer": "https://final-chat-app.vercel.app", 
-            "X-Title": "Final Chat App"
-        }
-        try:
-            response = requests.post(OPENACCOUNT_API_URL, json=payload, headers=headers, timeout=30)
-            response.raise_for_status()
-            api_response_data = response.json()
-            content = api_response_data['choices'][0]['message']['content']
-            return {"response": content}
-        except requests.exceptions.HTTPError as e:
-            return {"error": f"API call to OpenRouter failed: {e}. Response: {e.response.text}"}
-        except (KeyError, IndexError) as e:
-            return {"error": f"Failed to parse API response from OpenRouter. Response: {api_response_data}"}
-            
+    if model == 'gemma-7b':
+        # Using Google's Gemma model via OpenRouter (free)
+        return call_openrouter(prompt, "google/gemma-7b-it:free")
+    elif model == 'mistral-7b':
+        # Using the Mistral model via OpenRouter
+        return call_openrouter(prompt, "mistralai/mistral-7b-instruct")
     else:
         return {"error": "Invalid model specified."}
+
 
 class handler(BaseHTTPRequestHandler):
     """Vercel's required handler class for Python serverless functions."""
