@@ -12,8 +12,8 @@ HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
 # --- API URLs ---
-# We are switching back to the Mistral model, with better error handling.
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+# FINAL FIX for 404 ERROR: Switched to a reliable, conversational model from Microsoft.
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-large"
 # You have correctly identified the OpenRouter URL.
 OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -23,23 +23,21 @@ def call_external_api(prompt, model):
         if not HUGGINGFACE_API_KEY:
             return {"error": "Hugging Face API key is not configured on the server."}
         
-        payload = {"inputs": prompt}
+        # DialoGPT uses a different payload structure for conversation.
+        payload = {"inputs": {"text": prompt}}
         headers = { "Authorization": f"Bearer {HUGGINGFACE_API_KEY}" }
         
         try:
-            response = requests.post(HUGGINGFACE_API_URL, json=payload, headers=headers, timeout=45) # Increased timeout
+            response = requests.post(HUGGINGFACE_API_URL, json=payload, headers=headers, timeout=45)
             response.raise_for_status()
             api_response_data = response.json()
 
-            if isinstance(api_response_data, list) and len(api_response_data) > 0:
-                content = api_response_data[0].get('generated_text', '')
-                if content.startswith(prompt):
-                    content = content[len(prompt):].strip()
+            # The response format for DialoGPT is different.
+            if isinstance(api_response_data, dict) and 'generated_text' in api_response_data:
+                content = api_response_data.get('generated_text', '')
                 return {"response": content}
             else:
-                # This handles cases where the model is loading and returns an error object
                 if isinstance(api_response_data, dict) and 'error' in api_response_data:
-                    # This is a key fix: check for the "model is loading" error from Hugging Face
                     if "is currently loading" in api_response_data['error']:
                         estimated_time = api_response_data.get('estimated_time', 20)
                         return {"error": f"Model is loading, please try again in {int(estimated_time)} seconds."}
@@ -47,8 +45,6 @@ def call_external_api(prompt, model):
                 return {"error": f"Unexpected API response format from Hugging Face. Response: {api_response_data}"}
 
         except requests.exceptions.HTTPError as e:
-            # The 404 error you see means the code IS NOT UPDATED on Vercel.
-            # This logic will only run once the new code is deployed.
             return {"error": f"API call to Hugging Face failed: {e}. Response: {e.response.text}"}
         except Exception as e:
             return {"error": f"An unexpected error occurred with the Hugging Face call: {e}"}
@@ -63,7 +59,6 @@ def call_external_api(prompt, model):
         }
         headers = { 
             "Authorization": f"Bearer {OPENACCOUNT_API_KEY}",
-            # IMPORTANT: Replace the URL with your Vercel URL, or any valid URL.
             "HTTP-Referer": "https://final-chat-app.vercel.app", 
             "X-Title": "Final Chat App"
         }
