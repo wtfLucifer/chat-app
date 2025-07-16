@@ -8,19 +8,14 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- API Configuration ---
-# NEW: Key for the Hugging Face API
 HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY') 
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-
-# --- PLEASE CONFIGURE THIS VALUE ---
-# The error "NameResolutionError" means the URL below is WRONG.
-# PLEASE REPLACE THE URL BELOW WITH THE CORRECT ONE FROM YOUR API PROVIDER'S DOCUMENTATION.
-OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions" # <-- PASTE YOUR CORRECT URL HERE
-
-
-# --- No need to edit below this line ---
+# --- API URLs ---
+# This is the correct, standard URL for the Hugging Face Inference API.
 HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1"
+# You have correctly identified the OpenRouter URL.
+OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
@@ -36,39 +31,48 @@ def call_external_api(prompt, model):
             response.raise_for_status()
             api_response_data = response.json()
 
-            # The response is a list with a dictionary inside.
             if isinstance(api_response_data, list) and len(api_response_data) > 0:
                 content = api_response_data[0].get('generated_text', '')
-                # The model often returns the original prompt, so we remove it.
                 if content.startswith(prompt):
                     content = content[len(prompt):].strip()
                 return {"response": content}
             else:
+                # This handles cases where the model is loading and returns an error object
+                if isinstance(api_response_data, dict) and 'error' in api_response_data:
+                    return {"error": f"Hugging Face API Error: {api_response_data['error']}"}
                 return {"error": f"Unexpected API response format from Hugging Face. Response: {api_response_data}"}
 
-        except requests.exceptions.RequestException as e:
-            return {"error": f"API call to Hugging Face failed: {e}"}
+        except requests.exceptions.HTTPError as e:
+            return {"error": f"API call to Hugging Face failed: {e}. Response: {e.response.text}"}
         except Exception as e:
             return {"error": f"An unexpected error occurred with the Hugging Face call: {e}"}
 
     elif model == 'mistral-openaccount':
-        if "your-openaccount-provider.com" in OPENACCOUNT_API_URL:
-            return {"error": "The OpenAccount API URL has not been configured in api/index.py."}
         if not OPENACCOUNT_API_KEY:
-            return {"error": "OpenAccount API key is not configured on the server."}
+            return {"error": "OpenAccount (OpenRouter) API key is not configured on the server."}
         
-        payload = { "model": "mistral-7b", "messages": [{"role": "user", "content": prompt}] }
-        headers = { "Content-Type": "application/json", "Authorization": f"Bearer {OPENACCOUNT_API_KEY}" }
+        # --- FIX FOR 400 BAD REQUEST ---
+        # 1. The 'model' name must be the specific identifier used by OpenRouter.
+        # 2. OpenRouter requires two custom headers: HTTP-Referer and X-Title.
+        payload = { 
+            "model": "mistralai/mistral-7b-instruct", # Correct model identifier for OpenRouter
+            "messages": [{"role": "user", "content": prompt}] 
+        }
+        headers = { 
+            "Authorization": f"Bearer {OPENACCOUNT_API_KEY}",
+            "HTTP-Referer": "https://final-chat-app.vercel.app", # Replace with your Vercel URL
+            "X-Title": "Final Chat App" # Can be any name for your app
+        }
         try:
             response = requests.post(OPENACCOUNT_API_URL, json=payload, headers=headers, timeout=30)
             response.raise_for_status()
             api_response_data = response.json()
             content = api_response_data['choices'][0]['message']['content']
             return {"response": content}
-        except requests.exceptions.RequestException as e:
-            return {"error": f"API call to OpenAccount failed: {e}"}
+        except requests.exceptions.HTTPError as e:
+            return {"error": f"API call to OpenRouter failed: {e}. Response: {e.response.text}"}
         except (KeyError, IndexError) as e:
-            return {"error": f"Failed to parse API response from OpenAccount. Response: {api_response_data}"}
+            return {"error": f"Failed to parse API response from OpenRouter. Response: {api_response_data}"}
             
     else:
         return {"error": "Invalid model specified."}
