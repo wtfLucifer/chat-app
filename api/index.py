@@ -3,6 +3,7 @@ import json
 import os
 import requests
 import urllib3
+import datetime
 
 # Suppress only the InsecureRequestWarning from urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -12,10 +13,14 @@ HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
 # --- API URLs ---
-# FINAL DEBUGGING STEP: Switching to the most reliable model, gpt2, to confirm the connection.
+# Using the most reliable model, gpt2, to confirm the connection.
 HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/gpt2"
 # You have correctly identified the OpenRouter URL.
 OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# --- DEBUGGING VERSION ---
+# We will use this to confirm the new code is deployed.
+APP_VERSION = "v1.5-final-fix"
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
@@ -23,7 +28,6 @@ def call_external_api(prompt, model):
         if not HUGGINGFACE_API_KEY:
             return {"error": "Hugging Face API key is not configured on the server."}
         
-        # Standard payload for text generation models like gpt2
         payload = {"inputs": prompt}
         headers = { "Authorization": f"Bearer {HUGGINGFACE_API_KEY}" }
         
@@ -32,15 +36,13 @@ def call_external_api(prompt, model):
             response.raise_for_status()
             api_response_data = response.json()
 
-            # The response format for gpt2 is a list containing a dictionary.
             if isinstance(api_response_data, list) and len(api_response_data) > 0:
                 content = api_response_data[0].get('generated_text', '')
                 return {"response": content}
             else:
                 if isinstance(api_response_data, dict) and 'error' in api_response_data:
                     if "is currently loading" in api_response_data['error']:
-                        estimated_time = api_response_data.get('estimated_time', 20)
-                        return {"error": f"Model is loading, please try again in {int(estimated_time)} seconds."}
+                        return {"error": f"Model is loading, please try again in {int(api_response_data.get('estimated_time', 20))} seconds."}
                     return {"error": f"Hugging Face API Error: {api_response_data['error']}"}
                 return {"error": f"Unexpected API response format from Hugging Face. Response: {api_response_data}"}
 
@@ -78,10 +80,27 @@ def call_external_api(prompt, model):
 
 class handler(BaseHTTPRequestHandler):
     """Vercel's required handler class for Python serverless functions."""
+    def do_GET(self):
+        """Handles GET requests for debugging."""
+        if self.path == '/api' or self.path == '/api/':
+            self.send_response(200)
+            self.send_header('Content-type','application/json')
+            self.end_headers()
+            response = {
+                "status": "ok",
+                "version": APP_VERSION,
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b'Not Found')
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
