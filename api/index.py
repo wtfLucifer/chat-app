@@ -13,14 +13,14 @@ HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
 # --- API URLs ---
-# FINAL FIX: Switching to the most basic and reliable model, gpt2, to guarantee a connection.
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/gpt2"
+# FINAL FIX: Using the reliable microsoft/DialoGPT-small conversational model.
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-small"
 # You have correctly identified the OpenRouter URL.
 OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- DEBUGGING VERSION ---
 # We will use this to confirm the new code is deployed.
-APP_VERSION = "v2.1-gpt2-final"
+APP_VERSION = "v3.0-dialogpt-fix"
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
@@ -28,8 +28,14 @@ def call_external_api(prompt, model):
         if not HUGGINGFACE_API_KEY:
             return {"error": "Hugging Face API key is not configured on the server."}
         
-        # Standard payload for gpt2.
-        payload = {"inputs": prompt}
+        # DialoGPT uses a specific payload structure for conversation history.
+        payload = {
+            "inputs": {
+                "past_user_inputs": ["Hello, how are you?"],
+                "generated_responses": ["I'm doing great. What can I do for you?"],
+                "text": prompt
+            }
+        }
         headers = { "Authorization": f"Bearer {HUGGINGFACE_API_KEY}" }
         
         try:
@@ -37,9 +43,9 @@ def call_external_api(prompt, model):
             response.raise_for_status()
             api_response_data = response.json()
 
-            # The response format for gpt2 is a list containing a dictionary.
-            if isinstance(api_response_data, list) and len(api_response_data) > 0:
-                content = api_response_data[0].get('generated_text', '')
+            # The response format for DialoGPT.
+            if isinstance(api_response_data, dict) and 'generated_text' in api_response_data:
+                content = api_response_data.get('generated_text', '')
                 return {"response": content}
             else:
                 if isinstance(api_response_data, dict) and 'error' in api_response_data:
