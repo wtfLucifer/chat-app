@@ -13,14 +13,14 @@ HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
 # --- API URLs ---
-# Using the most reliable model, gpt2, to confirm the connection.
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/gpt2"
+# FINAL DEBUGGING STEP: Using a sentence-similarity model to guarantee a connection.
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2"
 # You have correctly identified the OpenRouter URL.
 OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- DEBUGGING VERSION ---
 # We will use this to confirm the new code is deployed.
-APP_VERSION = "v1.5-final-fix"
+APP_VERSION = "v1.6-similarity-test"
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
@@ -28,7 +28,16 @@ def call_external_api(prompt, model):
         if not HUGGINGFACE_API_KEY:
             return {"error": "Hugging Face API key is not configured on the server."}
         
-        payload = {"inputs": prompt}
+        # Payload for the sentence similarity model.
+        payload = {
+            "inputs": {
+                "source_sentence": prompt,
+                "sentences": [
+                    "That is a happy person.",
+                    "That is a sad person."
+                ]
+            }
+        }
         headers = { "Authorization": f"Bearer {HUGGINGFACE_API_KEY}" }
         
         try:
@@ -36,8 +45,9 @@ def call_external_api(prompt, model):
             response.raise_for_status()
             api_response_data = response.json()
 
-            if isinstance(api_response_data, list) and len(api_response_data) > 0:
-                content = api_response_data[0].get('generated_text', '')
+            # The response is a list of similarity scores.
+            if isinstance(api_response_data, list) and len(api_response_data) == 2:
+                content = f"Similarity to 'happy': {round(api_response_data[0], 2)}. Similarity to 'sad': {round(api_response_data[1], 2)}."
                 return {"response": content}
             else:
                 if isinstance(api_response_data, dict) and 'error' in api_response_data:
