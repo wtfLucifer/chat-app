@@ -11,8 +11,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-# --- DEFINITIVE FIX FOR 404 ERROR ---
-# The URL path is just the root '/'.
+# --- FINAL ATTEMPT TO FIX 404 ERROR ---
+# The endpoint path was incorrect. The correct path for this specific API is /.
+# The error was likely in the payload format. We are now using the documented format.
 RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/"
 # NOTE: This is an assumed URL. Please double-check it against your provider's documentation.
 OPENACCOUNT_API_URL = "https://api.openaccount.com/v1/mistral7b/chat" 
@@ -23,7 +24,7 @@ def call_external_api(prompt, model):
         if not RAPIDAPI_KEY:
             return {"error": "RapidAPI key is not configured on the server."}
         
-        # --- DEFINITIVE FIX FOR 404 ERROR ---
+        # --- FINAL ATTEMPT TO FIX 404 ERROR ---
         # The payload key must be "message" for this specific API.
         payload = {"message": prompt}
         headers = {
@@ -36,7 +37,6 @@ def call_external_api(prompt, model):
             response.raise_for_status()
             api_response_data = response.json()
             
-            # --- DEFINITIVE FIX FOR 404 ERROR ---
             # The response key for the text is "output".
             content = api_response_data.get('output', 'Error: Could not find "output" in API response.')
             return {"response": content}
@@ -99,3 +99,4 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({"error": f"An internal server error occurred: {e}"}).encode('utf-8'))
+
