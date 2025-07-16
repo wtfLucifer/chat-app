@@ -11,8 +11,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-# FIX: Added '/generate' to the end of the URL. A 404 error usually means the specific endpoint path is missing.
-RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/generate"
+# --- FIX FOR 404 ERROR ---
+# The previous URL was incorrect. Many RapidAPI providers use an OpenAI-compatible endpoint.
+# The host remains the same, but the path changes to '/v1/chat/completions'.
+RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/v1/chat/completions"
 # NOTE: This is an assumed URL. Please double-check it against your provider's documentation.
 OPENACCOUNT_API_URL = "https://api.openaccount.com/v1/mistral7b/chat" 
 
@@ -22,22 +24,31 @@ def call_external_api(prompt, model):
         if not RAPIDAPI_KEY:
             return {"error": "RapidAPI key is not configured on the server."}
         
-        # This payload structure is common for this API. Sending 'prompt' instead of 'message'.
-        payload = {"prompt": prompt}
+        # --- FIX FOR 404 ERROR ---
+        # The payload must now match the OpenAI-compatible structure.
+        payload = {
+            "model": "mistral-7b-instruct",
+            "messages": [{"role": "user", "content": prompt}]
+        }
         headers = {
             "content-type": "application/json",
             "X-RapidAPI-Key": RAPIDAPI_KEY,
             "X-RapidAPI-Host": "mistral-7b-instruct-v0.1.p.rapidapi.com"
         }
         try:
-            # Using verify=False to bypass potential SSL certificate verification issues.
             response = requests.post(RAPIDAPI_URL, json=payload, headers=headers, timeout=30, verify=False)
             response.raise_for_status()
             api_response_data = response.json()
-            # The API response key is often 'generated_text' or similar. Adjust if needed.
-            return {"response": api_response_data.get('generated_text', 'No valid response found.')}
+            
+            # --- FIX FOR 404 ERROR ---
+            # The response structure also changes to match the OpenAI format.
+            content = api_response_data['choices'][0]['message']['content']
+            return {"response": content}
         except requests.exceptions.RequestException as e:
             return {"error": f"API call to RapidAPI failed: {e}"}
+        except (KeyError, IndexError) as e:
+            return {"error": f"Failed to parse API response from RapidAPI. Response: {api_response_data}"}
+
 
     elif model == 'mistral-openaccount':
         if not OPENACCOUNT_API_KEY:
@@ -49,11 +60,12 @@ def call_external_api(prompt, model):
             response = requests.post(OPENACCOUNT_API_URL, json=payload, headers=headers, timeout=30)
             response.raise_for_status()
             api_response_data = response.json()
-            # Adjust this path based on the actual structure of the API response
             content = api_response_data['choices'][0]['message']['content']
             return {"response": content}
         except requests.exceptions.RequestException as e:
             return {"error": f"API call to OpenAccount failed: {e}"}
+        except (KeyError, IndexError) as e:
+            return {"error": f"Failed to parse API response from OpenAccount. Response: {api_response_data}"}
             
     else:
         return {"error": "Invalid model specified."}
