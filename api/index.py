@@ -12,8 +12,8 @@ HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
 # --- API URLs ---
-# FINAL FIX for 404 ERROR: Switched to a reliable, conversational model from Microsoft.
-HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-large"
+# FINAL FIX for 404 ERROR: Switched to the smaller, more reliable DialoGPT-small model.
+HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-small"
 # You have correctly identified the OpenRouter URL.
 OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
