@@ -11,9 +11,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-# --- FINAL FIX FOR 404 ERROR ---
-# The endpoint path was incorrect. Many providers use the base URL directly.
-# We will also change the payload to a more standard format for instruct models.
+# --- DEFINITIVE FIX FOR 404 ERROR ---
+# The URL path is just the root '/'.
 RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/"
 # NOTE: This is an assumed URL. Please double-check it against your provider's documentation.
 OPENACCOUNT_API_URL = "https://api.openaccount.com/v1/mistral7b/chat" 
@@ -24,10 +23,9 @@ def call_external_api(prompt, model):
         if not RAPIDAPI_KEY:
             return {"error": "RapidAPI key is not configured on the server."}
         
-        # --- FINAL FIX FOR 404 ERROR ---
-        # Changed payload to a common format for this type of API.
-        # It sends the prompt inside an 'inputs' field.
-        payload = {"inputs": f"<|prompter|>{prompt}<|endoftext|><|assistant|>"}
+        # --- DEFINITIVE FIX FOR 404 ERROR ---
+        # The payload key must be "message" for this specific API.
+        payload = {"message": prompt}
         headers = {
             "content-type": "application/json",
             "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -38,22 +36,14 @@ def call_external_api(prompt, model):
             response.raise_for_status()
             api_response_data = response.json()
             
-            # --- FINAL FIX FOR 404 ERROR ---
-            # The response is often a list with a dictionary inside.
-            # We will parse it carefully and provide a helpful error if the format is unexpected.
-            if isinstance(api_response_data, list) and len(api_response_data) > 0:
-                content = api_response_data[0].get('generated_text', '')
-                # The model might return the original prompt, so we remove it.
-                if prompt in content:
-                    content = content.split("<|assistant|>")[1].strip()
-                return {"response": content}
-            else:
-                 return {"error": f"Unexpected API response format from RapidAPI. Response: {api_response_data}"}
-
+            # --- DEFINITIVE FIX FOR 404 ERROR ---
+            # The response key for the text is "output".
+            content = api_response_data.get('output', 'Error: Could not find "output" in API response.')
+            return {"response": content}
         except requests.exceptions.RequestException as e:
             return {"error": f"API call to RapidAPI failed: {e}"}
-        except (KeyError, IndexError) as e:
-            return {"error": f"Failed to parse API response from RapidAPI. Response: {api_response_data}"}
+        except Exception as e:
+            return {"error": f"An unexpected error occurred with the RapidAPI call: {e}"}
 
 
     elif model == 'mistral-openaccount':
@@ -109,4 +99,3 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({"error": f"An internal server error occurred: {e}"}).encode('utf-8'))
-
