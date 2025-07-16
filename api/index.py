@@ -11,13 +11,18 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-# The URL for the RapidAPI endpoint.
-RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/"
+# --- FINAL FIX: PLEASE CONFIGURE THESE VALUES ---
 
-# --- FIX FOR NameResolutionError ---
-# The previous URL 'api.openaccount.com' was not valid.
+# 1. For RapidAPI:
+# Go to your RapidAPI dashboard, find the API you subscribed to, and get the correct Host and URL.
+# The error "API doesn't exists" means the host below is WRONG for your key.
+RAPIDAPI_HOST = "mistral-7b-instruct-v0.1.p.rapidapi.com" # <-- REPLACE THIS with the correct host from RapidAPI
+RAPIDAPI_URL = f"https://{RAPIDAPI_HOST}/" # The URL is built from the host.
+
+# 2. For OpenAccount:
+# The error "NameResolutionError" means the URL below is WRONG.
 # PLEASE REPLACE THE URL BELOW WITH THE CORRECT ONE FROM YOUR API PROVIDER'S DOCUMENTATION.
-OPENACCOUNT_API_URL = "https://YOUR_PROVIDER_URL_HERE/v1/chat" 
+OPENACCOUNT_API_URL = "https://api.your-openaccount-provider.com/v1/chat" # <-- REPLACE THIS with the correct URL.
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
@@ -25,30 +30,25 @@ def call_external_api(prompt, model):
         if not RAPIDAPI_KEY:
             return {"error": "RapidAPI key is not configured on the server."}
         
-        # This is the documented payload format for this specific API.
         payload = {"message": prompt}
         headers = {
             "content-type": "application/json",
             "X-RapidAPI-Key": RAPIDAPI_KEY,
-            "X-RapidAPI-Host": "mistral-7b-instruct-v0.1.p.rapidapi.com"
+            "X-RapidAPI-Host": RAPIDAPI_HOST # Using the variable from above
         }
         try:
             response = requests.post(RAPIDAPI_URL, json=payload, headers=headers, timeout=30, verify=False)
-            response.raise_for_status() # This will raise an error for 4xx or 5xx responses.
+            response.raise_for_status()
             api_response_data = response.json()
-            
-            # The response key for the text is "output".
-            content = api_response_data.get('output', 'Error: Could not find "output" in API response.')
+            content = api_response_data.get('output', f"Error: Could not find 'output' in API response. Full response: {api_response_data}")
             return {"response": content}
         except requests.exceptions.HTTPError as e:
-            # Provide more detail for HTTP errors, including the response text if available.
             return {"error": f"API call to RapidAPI failed: {e}. Response: {e.response.text}"}
         except Exception as e:
             return {"error": f"An unexpected error occurred with the RapidAPI call: {e}"}
 
-
     elif model == 'mistral-openaccount':
-        if "YOUR_PROVIDER_URL_HERE" in OPENACCOUNT_API_URL:
+        if "your-openaccount-provider.com" in OPENACCOUNT_API_URL:
             return {"error": "The OpenAccount API URL has not been configured in api/index.py."}
         if not OPENACCOUNT_API_KEY:
             return {"error": "OpenAccount API key is not configured on the server."}
