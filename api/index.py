@@ -14,20 +14,27 @@ OPENROUTER_API_KEY = os.environ.get('OPENACCOUNT_API_KEY') # Using the same Verc
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- DEBUGGING VERSION ---
-APP_VERSION = "v6.1-nous-hermes-fix"
+APP_VERSION = "v7.0-system-prompt-fix"
 
 def call_openrouter(prompt, model_identifier):
     """A single, reliable function to call the OpenRouter API."""
     if not OPENROUTER_API_KEY:
         return {"error": "API key is not configured on the server."}
 
+    # --- FINAL FIX for conversational responses ---
+    # Add a system prompt to instruct the model on how to behave.
+    system_prompt = "You are a helpful and concise assistant. Respond to the user in a natural, conversational way."
+    
     payload = { 
         "model": model_identifier,
-        "messages": [{"role": "user", "content": prompt}] 
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ] 
     }
     headers = { 
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://final-chat-app.vercel.app", # Replace with your Vercel URL
+        "HTTP-Referer": "https://chat-rkxpq0by7-tarun-gehlots-projects.vercel.app/", # Replace with your Vercel URL
         "X-Title": "Final Chat App" # Can be any name
     }
     try:
@@ -47,7 +54,7 @@ def call_openrouter(prompt, model_identifier):
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
     if model == 'gemma-7b':
-        # FIX: Switched to a different reliable free model on OpenRouter.
+        # Using Nous Hermes 2 model via OpenRouter (free)
         return call_openrouter(prompt, "nousresearch/nous-hermes-2-mixtral-8x7b-dpo")
     elif model == 'mistral-7b':
         # Using the Mistral model via OpenRouter
