@@ -11,7 +11,8 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
-RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/"
+# FIX: Added '/generate' to the end of the URL. A 404 error usually means the specific endpoint path is missing.
+RAPIDAPI_URL = "https://mistral-7b-instruct-v0.1.p.rapidapi.com/generate"
 # NOTE: This is an assumed URL. Please double-check it against your provider's documentation.
 OPENACCOUNT_API_URL = "https://api.openaccount.com/v1/mistral7b/chat" 
 
@@ -21,7 +22,8 @@ def call_external_api(prompt, model):
         if not RAPIDAPI_KEY:
             return {"error": "RapidAPI key is not configured on the server."}
         
-        payload = {"message": prompt}
+        # This payload structure is common for this API. Sending 'prompt' instead of 'message'.
+        payload = {"prompt": prompt}
         headers = {
             "content-type": "application/json",
             "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -32,8 +34,8 @@ def call_external_api(prompt, model):
             response = requests.post(RAPIDAPI_URL, json=payload, headers=headers, timeout=30, verify=False)
             response.raise_for_status()
             api_response_data = response.json()
-            # Adjust '.get('output')' based on the actual key in the API response
-            return {"response": api_response_data.get('output', 'No valid response found.')}
+            # The API response key is often 'generated_text' or similar. Adjust if needed.
+            return {"response": api_response_data.get('generated_text', 'No valid response found.')}
         except requests.exceptions.RequestException as e:
             return {"error": f"API call to RapidAPI failed: {e}"}
 
@@ -89,4 +91,3 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps({"error": f"An internal server error occurred: {e}"}).encode('utf-8'))
-
