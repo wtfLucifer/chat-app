@@ -13,14 +13,14 @@ HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
 OPENACCOUNT_API_KEY = os.environ.get('OPENACCOUNT_API_KEY')
 
 # --- API URLs ---
-# Restoring the conversational model now that the connection is confirmed.
+# Using the reliable microsoft/DialoGPT-small conversational model.
 HUGGINGFACE_API_URL = "https://api-inference.huggingface.co/models/microsoft/DialoGPT-small"
 # You have correctly identified the OpenRouter URL.
 OPENACCOUNT_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # --- DEBUGGING VERSION ---
 # We will use this to confirm the new code is deployed.
-APP_VERSION = "v5.0-final-working"
+APP_VERSION = "v5.1-dialogpt-small"
 
 def call_external_api(prompt, model):
     """Calls the appropriate external LLM API based on the model name."""
